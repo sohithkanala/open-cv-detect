@@ -6,6 +6,7 @@ import { AppComponent } from './app.component';
 import { NgOpenCVService } from './lib/ng-open-cv.service';
 import { OpenCVOptions } from './lib/ng-open-cv.models';
 import { NgOpenCVModule } from './lib/ng-open-cv.module';
+import { ImageCropperModule } from 'ngx-image-cropper';
 
 const openCVConfig: OpenCVOptions = {
   scriptUrl: `assets/opencv/opencv.js`,
@@ -18,6 +19,7 @@ const openCVConfig: OpenCVOptions = {
     BrowserModule,
     AppRoutingModule,
     NgOpenCVModule.forRoot(openCVConfig),
+    ImageCropperModule
   ],
   providers: [],
   bootstrap: [AppComponent],

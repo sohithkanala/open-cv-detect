@@ -99,7 +99,7 @@ export class NgOpenCVService {
     }
   }
 
-  createFileFromUrl(path: any, url: any) {
+  createFileFromUrl(path: string, url: string) {
     const request = new XMLHttpRequest();
     request.open('GET', url, true);
     request.responseType = 'arraybuffer';
@@ -188,7 +188,7 @@ export class NgOpenCVService {
     throw new Error(err);
   }
 
-  loadCode(scriptId: any, textAreaId: any) {
+  loadCode(scriptId: string, textAreaId: string) {
     const scriptNode = <HTMLScriptElement>document.getElementById(scriptId);
     const textArea = <HTMLTextAreaElement>document.getElementById(textAreaId);
     if (scriptNode.type !== 'text/code-snippet') {

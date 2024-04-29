@@ -2,8 +2,19 @@ import { Component, ElementRef, ViewChild } from "@angular/core";
 import { BehaviorSubject, Observable, filter, forkJoin, switchMap } from "rxjs";
 import { NgOpenCVService } from "./lib/ng-open-cv.service";
 import { OpenCVLoadResult } from "./lib/ng-open-cv.models";
+import { ImageCroppedEvent, ImageCropperComponent } from "ngx-image-cropper";
 
 declare var cv: any;
+
+export interface Point {
+	x: number;
+	y: number;
+}
+
+export class DocumentScanner {
+	detect(source: HTMLImageElement | HTMLCanvasElement): any {}
+	crop(source: HTMLImageElement | HTMLCanvasElement, points?: Point[], width?: number, height?: number): any {}
+}
 
 @Component({
 	selector: "app-root",
@@ -17,11 +28,20 @@ export class AppComponent {
 
 	@ViewChild("canvasOutput")
 	canvasOutput!: ElementRef;
+	imageForCrop: string = "";
 
 	private video!: HTMLVideoElement;
-	public innerWidth: any = 600;
-	public innerHeight: any = 600;
 	public loadingModel!: boolean;
+	public points!: any;
+	private socurceFrame!: any;
+	private socurceFrameDuplicate!: any;
+	imageCroppedSuccess = false;
+
+	croppedImage: string = "";
+	croppedImageDup: string = "";
+	showCropper = false;
+	cropperCoor: any = { x1: 0, y1: 0, x2: 200, y2: 300 };
+	videoProcessId: any;
 
 	// Inject the NgOpenCVService
 	constructor(private ngOpenCVService: NgOpenCVService) {}
@@ -91,18 +111,29 @@ export class AppComponent {
 		const cap = new cv.VideoCapture(video);
 
 		const FPS = 60;
-		const canvas = <HTMLCanvasElement>document.getElementById("canvasOutput");
 
-		const processVideo = () => {
+		const videoProcess = () => {
 			try {
-				const src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-				// const dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
+				this.socurceFrame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+				this.socurceFrameDuplicate = new cv.Mat(video.height, video.width, cv.CV_8UC4);
 
-				cap.read(src);
+				cap.read(this.socurceFrame);
+				cap.read(this.socurceFrameDuplicate);
+
+				const brightness = 1;
+				const contrast = 1;
+				// cv.addWeighted(
+				// 	src,
+				// 	contrast,
+				// 	new cv.Mat(src.rows, src.cols, src.type(), [brightness, brightness, brightness, 0]),
+				// 	0,
+				// 	0,
+				// 	src
+				// );
 
 				// Convert the image to grayscale.
 				const gray = new cv.Mat();
-				cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+				cv.cvtColor(this.socurceFrame, gray, cv.COLOR_RGBA2GRAY);
 
 				// Perform Gaussian blur to remove noise.
 				const blur = new cv.Mat();
@@ -115,33 +146,40 @@ export class AppComponent {
 				const hierarchy = new cv.Mat();
 				cv.findContours(thresh, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
 
-				const minCardArea = 5000; // Adjust this value as needed
-				const maxCardArea = 50000; // Adjust this value as needed
+				const minCardArea = 5000;
+				const maxCardArea = 50000;
+				let maxContourIndex = 0;
+				let maxArea = 0;
+				let rectCoordinates: { topLeft: { x: number; y: number }; bottomRight: { x: number; y: number } }[] = [];
 
 				// Iterate through contours to find the card contour
 				for (let i = 0; i < contours.size(); ++i) {
 					const contour = contours.get(i);
 					const contourArea = cv.contourArea(contour);
-					console.log("Contour area:", contourArea); // Debugging: Print contour areas
 
 					// Check if contour area falls within the specified range
 					if (contourArea >= minCardArea && contourArea <= maxCardArea) {
 						// Draw rectangle around the contour
+						maxArea = contourArea;
+						maxContourIndex = i;
 						const rect = cv.boundingRect(contour);
 						const topLeft = new cv.Point(rect.x, rect.y);
 						const bottomRight = new cv.Point(rect.x + rect.width, rect.y + rect.height);
 						const color = new cv.Scalar(255, 0, 0, 255);
-						cv.rectangle(src, topLeft, bottomRight, color, 2);
-						break; // Break after finding the first suitable contour
+						cv.rectangle(this.socurceFrame, topLeft, bottomRight, color, 2);
+						rectCoordinates.push({ topLeft: { x: rect.x, y: rect.y }, bottomRight: { x: rect.x + rect.width, y: rect.y + rect.height } });
+						// Break after finding the first suitable contour
+						break;
 					}
 				}
 
 				// Show the processed image
 				// cv.imshow("canvasOutputEdges", thresh);
-				cv.imshow("canvasOutput", src);
+				cv.imshow("canvasOutput", this.socurceFrame);
+				cv.imshow("canvasOutputOriginal", this.socurceFrameDuplicate);
+				this.points = rectCoordinates[0];
 
 				// Clean up
-				src.delete();
 				gray.delete();
 				blur.delete();
 				thresh.delete();
@@ -150,10 +188,96 @@ export class AppComponent {
 			} catch (err) {
 				console.error(err);
 			} finally {
-				setTimeout(processVideo, 1000 / FPS);
+				this.videoProcessId = requestAnimationFrame(videoProcess);
 			}
 		};
 
-		processVideo();
+		this.videoProcessId = requestAnimationFrame(videoProcess);
+	}
+
+	public captureImage() {
+		const canvasOutput = document.getElementById("canvasOutputOriginal")! as HTMLCanvasElement;
+		this.imageForCrop = canvasOutput.toDataURL();
+		this.socurceFrameDuplicate.delete();
+	}
+
+	imageCropped(event: ImageCroppedEvent) {
+		const reader = new FileReader();
+		reader.onload = async () => {
+			this.croppedImage = reader.result as string;
+		};
+		reader.readAsDataURL(event.blob!);
+	}
+
+	imageLoaded() {
+		this.showCropper = true;
+		cancelAnimationFrame(this.videoProcessId);
+	}
+
+	cropperReady(event: any) {
+		setTimeout(() => {
+			this.cropperCoor = { x1: this.points.topLeft.x, y1: this.points.topLeft.y, x2: this.points.bottomRight.x, y2: this.points.bottomRight.y };
+		}, 2);
+	}
+
+	loadImageFailed() {
+		console.log("Load failed");
+	}
+
+	async applyBrightnessContrast(input_img: string, brightness = 0, contrast = 0) {
+		let image = new Image();
+		image.src = input_img;
+		await new Promise((r) => {
+			image.onload = r;
+		});
+
+		const imgData = cv.imread(image);
+		let buf = new cv.Mat();
+
+		imgData.copyTo(buf);
+		let shadow;
+		let highlight;
+
+		if (brightness != 0) {
+			let alpha_b, gamma_b;
+			if (brightness > 0) {
+				shadow = brightness;
+				highlight = 255;
+			} else {
+				shadow = 0;
+				highlight = 255 + brightness;
+			}
+			alpha_b = (highlight - shadow) / 255;
+			gamma_b = shadow;
+
+			cv.addWeighted(input_img, alpha_b, input_img, 0, gamma_b, buf);
+		}
+
+		if (contrast != 0) {
+			let f = (131 * (contrast + 127)) / (127 * (131 - contrast));
+			let alpha_c = f;
+			let gamma_c = 127 * (1 - f);
+
+			cv.addWeighted(buf, alpha_c, buf, 0, gamma_c, buf);
+		}
+
+		const imgData1 = new ImageData(new Uint8ClampedArray(buf.data), buf.cols, buf.rows);
+		const canvas = document.createElement("canvas");
+		var ctx = canvas.getContext("2d");
+		ctx!.clearRect(0, 0, canvas.width, canvas.height);
+		canvas.width = imgData1.width;
+		canvas.height = imgData1.height;
+		ctx!.putImageData(imgData1, 0, 0);
+
+		// Clean up
+		imgData.delete();
+		buf.delete();
+
+		return canvas.toDataURL();
+	}
+
+	async cropImage() {
+		this.croppedImageDup = await this.applyBrightnessContrast(this.croppedImage);
+		this.imageCroppedSuccess = true;
 	}
 }
