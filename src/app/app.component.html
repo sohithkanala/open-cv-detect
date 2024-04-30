@@ -4,37 +4,35 @@
 		<p>Loading...</p>
 	</div>
 
-	<button class="btn" [disabled]="!classifiersLoaded$" (click)="captureImage()" *ngIf="!showCropper">Capture</button>
-	<button class="btn" [disabled]="!classifiersLoaded$" (click)="cropImage()" *ngIf="showCropper">Crop Image</button>
-
 	<ng-container *ngIf="!loadingModel">
+		<button class="btn" [disabled]="!classifiersLoaded$" (click)="captureImage()" *ngIf="!showCropper">Capture</button>
+		<button class="btn" [disabled]="!classifiersLoaded$" (click)="cropImage()" *ngIf="showCropper">Crop Image</button>
 		<video hidden id="videotag" width="600" height="600"></video>
 		<ng-container *ngIf="!showCropper">
 			<canvas #canvasOutput id="canvasOutput"></canvas>
 			<canvas #canvasOutput id="canvasOutputOriginal" hidden></canvas>
 		</ng-container>
-    <ng-container *ngIf="imageCroppedSuccess">
-      <img [src]="croppedImageDup" alt="">
-    </ng-container>
+		<ng-container *ngIf="imageCroppedSuccess">
+			<img [src]="croppedImageDup" alt="" />
+		</ng-container>
+		<div class="">
+			<image-cropper
+				[maintainAspectRatio]="false"
+				[aspectRatio]="4 / 3"
+				[resizeToWidth]="0"
+				[cropperMinWidth]="0"
+				[onlyScaleDown]="true"
+				[roundCropper]="false"
+				format="png"
+				outputType="both"
+				(imageCropped)="imageCropped($event)"
+				(imageLoaded)="imageLoaded()"
+				(cropperReady)="cropperReady($event)"
+				(loadImageFailed)="loadImageFailed()"
+				[style.display]="showCropper ? null : 'none'"
+				[cropper]="cropperCoor"
+				[imageBase64]="imageForCrop"
+			></image-cropper>
+		</div>
 	</ng-container>
-</div>
-
-<div class="">
-	<image-cropper
-		[maintainAspectRatio]="false"
-		[aspectRatio]="4 / 3"
-		[resizeToWidth]="0"
-		[cropperMinWidth]="0"
-		[onlyScaleDown]="true"
-		[roundCropper]="false"
-		format="png"
-		outputType="both"
-		(imageCropped)="imageCropped($event)"
-		(imageLoaded)="imageLoaded()"
-		(cropperReady)="cropperReady($event)"
-		(loadImageFailed)="loadImageFailed()"
-		[style.display]="showCropper ? null : 'none'"
-		[cropper]="cropperCoor"
-		[imageBase64]="imageForCrop"
-	></image-cropper>
 </div>

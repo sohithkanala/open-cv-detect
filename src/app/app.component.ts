@@ -32,18 +32,19 @@ export class AppComponent {
 
 	private video!: HTMLVideoElement;
 	public loadingModel!: boolean;
-	public points!: any;
+	private points!: any;
 	private socurceFrame!: any;
 	private socurceFrameDuplicate!: any;
-	imageCroppedSuccess = false;
+	public imageCroppedSuccess = false;
 
-	croppedImage: string = "";
-	croppedImageDup: string = "";
-	showCropper = false;
-	cropperCoor: any = { x1: 0, y1: 0, x2: 200, y2: 300 };
-	videoProcessId: any;
+	private croppedImage: string = "";
+	public croppedImageDup: string = "";
+	public showCropper = false;
+	public cropperCoor: any = { x1: 0, y1: 0, x2: 200, y2: 300 };
+	private videoProcessId: any;
+	private maxBrightness = 30;
+	private maxContrast = 30;
 
-	// Inject the NgOpenCVService
 	constructor(private ngOpenCVService: NgOpenCVService) {}
 
 	ngOnInit() {
@@ -84,7 +85,7 @@ export class AppComponent {
 		}
 	}
 
-	clearOutputCanvas() {
+	private clearOutputCanvas() {
 		const context = this.canvasOutput.nativeElement.getContext("2d");
 		context.clearRect(0, 0, this.canvasOutput.nativeElement.width, this.canvasOutput.nativeElement.height);
 	}
@@ -107,7 +108,7 @@ export class AppComponent {
 		}
 	}
 
-	initializeOpenCV(video: HTMLVideoElement) {
+	private initializeOpenCV(video: HTMLVideoElement): void {
 		const cap = new cv.VideoCapture(video);
 
 		const FPS = 60;
@@ -122,14 +123,6 @@ export class AppComponent {
 
 				const brightness = 1;
 				const contrast = 1;
-				// cv.addWeighted(
-				// 	src,
-				// 	contrast,
-				// 	new cv.Mat(src.rows, src.cols, src.type(), [brightness, brightness, brightness, 0]),
-				// 	0,
-				// 	0,
-				// 	src
-				// );
 
 				// Convert the image to grayscale.
 				const gray = new cv.Mat();
@@ -168,16 +161,20 @@ export class AppComponent {
 						const color = new cv.Scalar(255, 0, 0, 255);
 						cv.rectangle(this.socurceFrame, topLeft, bottomRight, color, 2);
 						rectCoordinates.push({ topLeft: { x: rect.x, y: rect.y }, bottomRight: { x: rect.x + rect.width, y: rect.y + rect.height } });
-						// Break after finding the first suitable contour
+
 						break;
 					}
 				}
 
 				// Show the processed image
 				// cv.imshow("canvasOutputEdges", thresh);
+
 				cv.imshow("canvasOutput", this.socurceFrame);
 				cv.imshow("canvasOutputOriginal", this.socurceFrameDuplicate);
 				this.points = rectCoordinates[0];
+
+				this.socurceFrameDuplicate.delete();
+				this.socurceFrame.delete();
 
 				// Clean up
 				gray.delete();
@@ -198,10 +195,9 @@ export class AppComponent {
 	public captureImage() {
 		const canvasOutput = document.getElementById("canvasOutputOriginal")! as HTMLCanvasElement;
 		this.imageForCrop = canvasOutput.toDataURL();
-		this.socurceFrameDuplicate.delete();
 	}
 
-	imageCropped(event: ImageCroppedEvent) {
+	public imageCropped(event: ImageCroppedEvent): void {
 		const reader = new FileReader();
 		reader.onload = async () => {
 			this.croppedImage = reader.result as string;
@@ -209,22 +205,22 @@ export class AppComponent {
 		reader.readAsDataURL(event.blob!);
 	}
 
-	imageLoaded() {
+	public imageLoaded(): void {
 		this.showCropper = true;
 		cancelAnimationFrame(this.videoProcessId);
 	}
 
-	cropperReady(event: any) {
+	public cropperReady(event: any): void {
 		setTimeout(() => {
 			this.cropperCoor = { x1: this.points.topLeft.x, y1: this.points.topLeft.y, x2: this.points.bottomRight.x, y2: this.points.bottomRight.y };
 		}, 2);
 	}
 
-	loadImageFailed() {
+	public loadImageFailed(): void {
 		console.log("Load failed");
 	}
 
-	async applyBrightnessContrast(input_img: string, brightness = 0, contrast = 0) {
+	private async applyBrightnessContrast(input_img: string, brightness = 0, contrast = 0): Promise<string> {
 		let image = new Image();
 		image.src = input_img;
 		await new Promise((r) => {
@@ -249,15 +245,13 @@ export class AppComponent {
 			}
 			alpha_b = (highlight - shadow) / 255;
 			gamma_b = shadow;
-
-			cv.addWeighted(input_img, alpha_b, input_img, 0, gamma_b, buf);
+			cv.addWeighted(imgData, alpha_b, imgData, 0, gamma_b, buf);
 		}
 
 		if (contrast != 0) {
 			let f = (131 * (contrast + 127)) / (127 * (131 - contrast));
 			let alpha_c = f;
 			let gamma_c = 127 * (1 - f);
-
 			cv.addWeighted(buf, alpha_c, buf, 0, gamma_c, buf);
 		}
 
@@ -272,12 +266,11 @@ export class AppComponent {
 		// Clean up
 		imgData.delete();
 		buf.delete();
-
 		return canvas.toDataURL();
 	}
 
-	async cropImage() {
-		this.croppedImageDup = await this.applyBrightnessContrast(this.croppedImage);
+	public async cropImage(): Promise<void> {
+		this.croppedImageDup = await this.applyBrightnessContrast(this.croppedImage, this.maxBrightness, this.maxContrast);
 		this.imageCroppedSuccess = true;
 	}
 }
